@@ -29,11 +29,38 @@ jobs:
           zlib1g-dev libncurses5-dev \
           libncursesw5-dev \
           cmake libffi-dev libssl-dev \
-          python3-pip || true
+          python3-pip wget unzip curl || true
         # Try to install libtinfo5/libtinfo6 if available
         sudo apt-get install -y libtinfo6 2>/dev/null || \
         sudo apt-get install -y libtinfo5 2>/dev/null || \
         echo "libtinfo not found, continuing without it"
+    
+    - name: Set up Android SDK
+      run: |
+        # Create Android SDK directory
+        mkdir -p ~/.android
+        export ANDROID_HOME=$HOME/.android/sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+        
+        # Download command line tools if not exists
+        if [ ! -d "$ANDROID_HOME/cmdline-tools" ]; then
+          cd ~/.android
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          mv cmdline-tools latest
+          mv latest $ANDROID_HOME/cmdline-tools/
+          rm commandlinetools-linux-9477386_latest.zip
+        fi
+        
+        # Accept licenses and install build-tools
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        sdkmanager "platform-tools" "build-tools;33.0.0" "platforms;android-30" > /dev/null 2>&1 || true
+        
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "PATH=$PATH" >> $GITHUB_ENV
     
     - name: Install Buildozer and dependencies
       run: |
@@ -57,8 +84,13 @@ jobs:
     - name: Build APK
       run: |
         export PATH="$HOME/.local/bin:$PATH"
+        export ANDROID_HOME=${ANDROID_HOME:-$HOME/.android/sdk}
+        export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
         python3 -m buildozer android debug
       timeout-minutes: 60
+      env:
+        ANDROID_HOME: ${{ env.ANDROID_HOME || '$HOME/.android/sdk' }}
+        ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT || '$HOME/.android/sdk' }}
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
