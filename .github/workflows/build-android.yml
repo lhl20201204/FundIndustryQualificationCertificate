@@ -35,10 +35,11 @@ jobs:
         sudo apt-get install -y libtinfo5 2>/dev/null || \
         echo "libtinfo not found, continuing without it"
     
-    - name: Install Buildozer
+    - name: Install Buildozer and dependencies
       run: |
-        pip install --user buildozer
+        pip install --user buildozer cython
         python3 -m buildozer --version
+        python3 -c "import Cython; print('Cython version:', Cython.__version__)"
     
     - name: Verify project files
       run: |
