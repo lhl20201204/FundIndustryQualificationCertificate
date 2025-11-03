@@ -35,16 +35,9 @@ jobs:
       run: |
         pip install --user buildozer
     
-    - name: Initialize Buildozer
-      run: |
-        python3 -m buildozer android debug
-    
     - name: Build APK
       run: |
         python3 -m buildozer android debug
-      env:
-        ANDROID_HOME: ${{ secrets.ANDROID_HOME }}
-        ANDROID_SDK_ROOT: ${{ secrets.ANDROID_SDK_ROOT }}
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v3
@@ -52,12 +45,4 @@ jobs:
         name: android-apk
         path: bin/*.apk
         retention-days: 30
-    
-    - name: Create Release
-      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: bin/*.apk
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
