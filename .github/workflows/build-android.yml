@@ -34,10 +34,26 @@ jobs:
     - name: Install Buildozer
       run: |
         pip install --user buildozer
+        python3 -m buildozer --version
+    
+    - name: Verify project files
+      run: |
+        echo "Checking project files..."
+        ls -la
+        echo ""
+        echo "Checking required files..."
+        test -f main_android.py && echo "✓ main_android.py exists" || echo "✗ main_android.py missing"
+        test -f questions.json && echo "✓ questions.json exists" || echo "✗ questions.json missing"
+        test -f buildozer.spec && echo "✓ buildozer.spec exists" || echo "✗ buildozer.spec missing"
+        echo ""
+        echo "buildozer.spec content:"
+        head -30 buildozer.spec
     
     - name: Build APK
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         python3 -m buildozer android debug
+      timeout-minutes: 60
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v3
