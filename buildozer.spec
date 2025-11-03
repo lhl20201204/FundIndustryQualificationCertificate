@@ -48,6 +48,9 @@ android.api = 30
 # (str) Android SDK 目录（留空自动检测）
 #android.sdk_path = 
 
+# (str) Android Build Tools 版本
+android.build_tools_version = 33.0.0 
+
 # (str) Android 架构
 android.archs = arm64-v8a,armeabi-v7a
 

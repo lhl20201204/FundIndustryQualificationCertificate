@@ -41,22 +41,54 @@ jobs:
         python3 -m buildozer --version
         python3 -c "import Cython; print('Cython version:', Cython.__version__)"
     
-    - name: Initialize Buildozer and download Android SDK
+    - name: Set up Android SDK with Build Tools
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        # Let Buildozer initialize and download Android SDK
-        # This will download SDK to .buildozer/android/platform/android-sdk
-        echo "Initializing Buildozer Android environment..."
-        # Run buildozer android debug once to trigger SDK download
-        # Use --verbose to see what's happening, but capture output
-        python3 -m buildozer android debug 2>&1 | head -100 || true
-        echo "Checking if SDK was downloaded..."
-        if [ -d ".buildozer/android/platform/android-sdk/build-tools" ]; then
-          echo "✓ Android SDK build-tools found"
-          ls -la .buildozer/android/platform/android-sdk/build-tools/ || true
-        else
-          echo "⚠ SDK not found yet, will download during full build"
+        # Create Buildozer's Android SDK directory
+        mkdir -p ~/.buildozer/android/platform/android-sdk
+        
+        # Download Android Command Line Tools
+        cd ~/.buildozer/android/platform/android-sdk
+        if [ ! -d "cmdline-tools" ]; then
+          echo "Downloading Android Command Line Tools..."
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools
+          mv cmdline-tools latest
+          mv latest cmdline-tools/
+          rm commandlinetools-linux-9477386_latest.zip
         fi
+        
+        # Set up environment
+        export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+        
+        # Accept all licenses
+        echo "Accepting Android SDK licenses..."
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        
+        # Install platform-tools, build-tools, and platform
+        echo "Installing Android SDK components..."
+        sdkmanager "platform-tools" "build-tools;33.0.0" "platforms;android-30" > /dev/null 2>&1
+        
+        # Verify build-tools installation
+        if [ -d "$ANDROID_HOME/build-tools/33.0.0" ]; then
+          echo "✓ Build Tools 33.0.0 installed successfully"
+          ls -la $ANDROID_HOME/build-tools/33.0.0/ | grep aidl || echo "⚠ aidl not found in 33.0.0"
+        fi
+        
+        # Also check if Buildozer's expected path exists
+        if [ -d "$ANDROID_HOME/build-tools" ]; then
+          echo "✓ Build Tools directory created"
+          # Create symlink to the version Buildozer expects, or just verify
+          echo "Build tools versions available:"
+          ls -la $ANDROID_HOME/build-tools/ || true
+        fi
+        
+        # Save environment variables
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "PATH=$PATH" >> $GITHUB_ENV
     
     - name: Verify project files
       run: |
