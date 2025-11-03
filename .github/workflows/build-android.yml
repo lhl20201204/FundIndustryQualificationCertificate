@@ -47,8 +47,16 @@ jobs:
         # Let Buildozer initialize and download Android SDK
         # This will download SDK to .buildozer/android/platform/android-sdk
         echo "Initializing Buildozer Android environment..."
-        python3 -m buildozer android update || true
-        echo "Buildozer initialization completed"
+        # Run buildozer android debug once to trigger SDK download
+        # Use --verbose to see what's happening, but capture output
+        python3 -m buildozer android debug 2>&1 | head -100 || true
+        echo "Checking if SDK was downloaded..."
+        if [ -d ".buildozer/android/platform/android-sdk/build-tools" ]; then
+          echo "✓ Android SDK build-tools found"
+          ls -la .buildozer/android/platform/android-sdk/build-tools/ || true
+        else
+          echo "⚠ SDK not found yet, will download during full build"
+        fi
     
     - name: Verify project files
       run: |
