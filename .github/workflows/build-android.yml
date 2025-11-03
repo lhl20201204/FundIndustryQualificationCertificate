@@ -1,0 +1,63 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git zip unzip openjdk-11-jdk \
+          autoconf libtool pkg-config \
+          zlib1g-dev libncurses5-dev \
+          libncursesw5-dev libtinfo5 \
+          cmake libffi-dev libssl-dev \
+          python3-pip
+    
+    - name: Install Buildozer
+      run: |
+        pip install --user buildozer
+    
+    - name: Initialize Buildozer
+      run: |
+        python3 -m buildozer android debug
+    
+    - name: Build APK
+      run: |
+        python3 -m buildozer android debug
+      env:
+        ANDROID_HOME: ${{ secrets.ANDROID_HOME }}
+        ANDROID_SDK_ROOT: ${{ secrets.ANDROID_SDK_ROOT }}
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: android-apk
+        path: bin/*.apk
+        retention-days: 30
+    
+    - name: Create Release
+      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: bin/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
