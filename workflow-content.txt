@@ -1,0 +1,65 @@
+# 这是 GitHub Actions 工作流文件内容
+# 如果无法通过 Git 推送，请在 GitHub 网站上手动创建
+
+文件路径: .github/workflows/build-android.yml
+
+---
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git zip unzip openjdk-11-jdk \
+          autoconf libtool pkg-config \
+          zlib1g-dev libncurses5-dev \
+          libncursesw5-dev libtinfo5 \
+          cmake libffi-dev libssl-dev \
+          python3-pip
+    
+    - name: Install Buildozer
+      run: |
+        pip install --user buildozer
+    
+    - name: Build APK
+      run: |
+        python3 -m buildozer android debug
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: android-apk
+        path: bin/*.apk
+        retention-days: 30
+
+---
+
+使用说明：
+1. 访问您的 GitHub 仓库网页
+2. 点击 "Add file" → "Create new file"
+3. 在路径输入框中输入: .github/workflows/build-android.yml
+4. 将上面的内容（从 name: 开始到末尾）复制粘贴进去
+5. 点击 "Commit new file"
+6. 然后访问 Actions 页面，点击 "Run workflow" 触发构建
+

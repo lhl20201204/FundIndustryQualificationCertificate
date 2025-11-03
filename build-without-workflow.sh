@@ -1,0 +1,28 @@
+#!/bin/bash
+# 不使用 GitHub Actions 的构建方案
+
+echo "=========================================="
+echo "Android APK 构建方案选择"
+echo "=========================================="
+echo ""
+echo "由于无法使用 Docker 和 GitHub Actions，请选择其他方案："
+echo ""
+echo "方案 1: 使用 Linux 虚拟机（UTM - 免费）"
+echo "  1. 下载 UTM: https://mac.getutm.app/"
+echo "  2. 安装 Ubuntu 22.04"
+echo "  3. 在虚拟机中运行构建"
+echo ""
+echo "方案 2: 使用云服务器"
+echo "  1. 租用 Ubuntu 云服务器（阿里云/腾讯云）"
+echo "  2. SSH 连接并运行构建"
+echo ""
+echo "方案 3: 手动在 GitHub 网站创建 Workflow"
+echo "  1. 访问仓库网页"
+echo "  2. 手动创建 .github/workflows/build-android.yml 文件"
+echo "  3. 在 Actions 页面触发构建"
+echo ""
+echo "方案 4: 请朋友/同事帮忙构建"
+echo "  如果他们有 Linux 环境或 Docker，可以代构建"
+echo ""
+echo "详细说明请查看: ALTERNATIVE_BUILD.md"
+
