@@ -214,6 +214,10 @@ jobs:
             if grep -qE '\blong\b' "$file" 2>/dev/null; then
               echo "🔧 Patching pyjnius file: $file"
               
+              # Replace long as dictionary key: long: -> int:
+              sed -i 's/^[[:space:]]*long:[[:space:]]*/    int: /g' "$file"
+              sed -i 's/[[:space:]]*long:[[:space:]]*/ int: /g' "$file"
+              
               # Replace isinstance(arg, long) with isinstance(arg, int)
               sed -i 's/isinstance(\([^,]*\), long)/isinstance(\1, int)/g' "$file"
               
@@ -235,6 +239,10 @@ jobs:
               
               # Replace 'long' type in isinstance checks (more comprehensive)
               sed -i 's/isinstance(\([^)]*\), long)/isinstance(\1, int)/g' "$file"
+              
+              # Replace long as a standalone type reference (e.g., long: 'J' in dict)
+              # This handles cases like: long: 'J', or long: 'J'
+              sed -i 's/\blong\b/int/g' "$file"
               
               echo "✓ Patched: $file"
               patched=1
