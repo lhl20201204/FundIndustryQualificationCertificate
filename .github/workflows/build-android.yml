@@ -54,16 +54,28 @@ jobs:
           unzip -q commandlinetools-linux-9477386_latest.zip
           
           # The zip extracts to 'cmdline-tools' directory, we need to move it to cmdline-tools/latest
-          if [ -d "cmdline-tools" ]; then
-            mkdir -p cmdline-tools-temp
-            mv cmdline-tools/* cmdline-tools-temp/
-            rmdir cmdline-tools
+          # Structure after unzip: cmdline-tools/bin, cmdline-tools/lib, etc.
+          # We need: cmdline-tools/latest/bin, cmdline-tools/latest/lib, etc.
+          if [ -d "cmdline-tools" ] && [ -f "cmdline-tools/bin/sdkmanager" ]; then
+            # Extract contents to temp directory
+            mkdir -p temp_latest
+            mv cmdline-tools/* temp_latest/ 2>/dev/null || true
+            mv cmdline-tools/.* temp_latest/ 2>/dev/null || true
+            rmdir cmdline-tools 2>/dev/null || rm -rf cmdline-tools
+            # Create proper structure
             mkdir -p cmdline-tools
-            mv cmdline-tools-temp cmdline-tools/latest
+            mv temp_latest cmdline-tools/latest
+          elif [ -d "cmdline-tools" ]; then
+            # Already has cmdline-tools, check if it has latest subdirectory
+            if [ ! -d "cmdline-tools/latest" ]; then
+              mkdir -p cmdline-tools/latest
+              # Move all contents to latest
+              find cmdline-tools -maxdepth 1 -mindepth 1 ! -name latest -exec mv {} cmdline-tools/latest/ \; 2>/dev/null || true
+            fi
           else
-            # If structure is different, create the expected structure
-            mkdir -p cmdline-tools/latest
-            if [ -d "bin" ]; then
+            # If cmdline-tools doesn't exist, check if files are in root
+            if [ -f "bin/sdkmanager" ]; then
+              mkdir -p cmdline-tools/latest
               mv bin lib NOTICE.txt source.properties cmdline-tools/latest/ 2>/dev/null || true
             fi
           fi
