@@ -266,36 +266,73 @@ jobs:
           sleep 2
         done
         
-        # Wait for buildozer to finish
+        # Wait for buildozer to finish and capture exit code
         wait $BUILDOZER_PID
         BUILD_EXIT=$?
         
-        if [ $BUILD_EXIT -eq 0 ]; then
-          echo "✓ Build succeeded"
-          exit 0
-        else
+        # Check if APK was actually generated
+        APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+        echo ""
+        echo "📊 Build Summary:"
+        echo "  Exit code: $BUILD_EXIT"
+        echo "  APK files found: $APK_COUNT"
+        echo ""
+        
+        if [ $BUILD_EXIT -ne 0 ]; then
           echo "⚠ Build failed with exit code: $BUILD_EXIT"
           echo "🔄 Performing final patch attempt..."
           patch_pyjnius_files
           echo "🔄 Retrying build..."
-          PYTHONUNBUFFERED=1 python3 -m buildozer android debug || exit $?
+          PYTHONUNBUFFERED=1 python3 -m buildozer android debug
+          BUILD_EXIT=$?
+          APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+          echo "  Retry exit code: $BUILD_EXIT"
+          echo "  APK files found after retry: $APK_COUNT"
         fi
+        
+        # Verify APK was created
+        if [ $BUILD_EXIT -eq 0 ] && [ $APK_COUNT -eq 0 ]; then
+          echo "⚠ Build reported success but no APK found!"
+          echo "📋 Checking build log for errors..."
+          tail -50 build.log | grep -i "error\|fail\|exception" || echo "No obvious errors in last 50 lines"
+          echo ""
+          echo "Full build log saved to build.log"
+          exit 1
+        fi
+        
+        if [ $BUILD_EXIT -ne 0 ]; then
+          echo "❌ Build failed"
+          exit 1
+        fi
+        
+        echo "✓ Build succeeded with $APK_COUNT APK file(s)"
+        find . -name "*.apk" -type f 2>/dev/null | head -5
       timeout-minutes: 90
     
     - name: Find and list APK files
+      if: always()
       run: |
         echo "🔍 Searching for APK files..."
         echo ""
         echo "Current directory: $(pwd)"
         echo ""
         echo "Files in bin/ directory:"
-        ls -lah bin/ 2>/dev/null || echo "bin/ directory not found"
+        ls -lah bin/ 2>/dev/null || echo "bin/ directory not found or empty"
         echo ""
-        echo "Searching for APK files in project root:"
-        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found in project root"
+        echo "Searching for APK files in entire project:"
+        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found anywhere"
         echo ""
-        echo "Searching in .buildozer directory:"
-        find .buildozer -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found in .buildozer"
+        echo "Searching in .buildozer/android/platform/build-* directories:"
+        find .buildozer/android/platform/build-* -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files in build directories"
+        echo ""
+        # Check if build.log exists and show relevant info
+        if [ -f build.log ]; then
+          echo "📋 Build log summary (last 20 lines):"
+          tail -20 build.log
+          echo ""
+          echo "Checking for 'BUILD SUCCESSFUL' or similar messages:"
+          grep -i "build.*success\|apk.*created\|package.*created" build.log | tail -5 || echo "No success messages found"
+        fi
         echo ""
         # List APK files with full path for upload
         APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null | head -10)
@@ -303,9 +340,9 @@ jobs:
           echo "✓ Found APK files:"
           echo "$APK_FILES"
           echo ""
-          echo "APK_FILES<<EOF" >> $GITHUB_ENV
-          echo "$APK_FILES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          for apk in $APK_FILES; do
+            echo "  - $(ls -lh "$apk" | awk '{print $5, $9}')"
+          done
         else
           echo "⚠ No APK files found"
         fi
