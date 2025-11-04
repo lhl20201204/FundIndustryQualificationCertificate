@@ -285,66 +285,106 @@ jobs:
         }
         trap cleanup EXIT
         
-        # Run buildozer with log monitoring
+        # Run buildozer with proper error handling
         echo "🚀 Starting buildozer..."
-        # Use unbuffered output to see logs in real-time
-        PYTHONUNBUFFERED=1 python3 -m buildozer android debug 2>&1 | tee build.log &
-        BUILDOZER_PID=$!
         
-        # Monitor build log for pyjnius compilation errors
-        while kill -0 $BUILDOZER_PID 2>/dev/null; do
-          # Check if we're at the pyjnius compilation stage
-          if tail -100 build.log 2>/dev/null | grep -qE "(Cythonize jnius|pyjnius|jnius.*\.pyx|jnius.*\.pxi)"; then
-            echo "🔧 Detected pyjnius compilation, patching all files..."
-            patch_pyjnius_files
-            sleep 1
+        # Function to run build and check for success
+        run_build() {
+          local attempt=$1
+          echo "📦 Build attempt $attempt"
+          
+          # Run buildozer and capture output
+          PYTHONUNBUFFERED=1 python3 -m buildozer android debug 2>&1 | tee "build.log.$attempt" &
+          BUILDOZER_PID=$!
+          
+          # Monitor build log for pyjnius compilation and patch files
+          while kill -0 $BUILDOZER_PID 2>/dev/null; do
+            # Check if we're at the pyjnius compilation stage
+            if tail -100 "build.log.$attempt" 2>/dev/null | grep -qE "(Cythonize jnius|pyjnius|jnius.*\.pyx|jnius.*\.pxi)"; then
+              echo "🔧 Detected pyjnius compilation, patching all files..."
+              patch_pyjnius_files
+              sleep 1
+            fi
+            # Continuously patch files in case they're downloaded during build
+            patch_pyjnius_files > /dev/null 2>&1
+            sleep 2
+          done
+          
+          # Wait for buildozer to finish and capture exit code
+          wait $BUILDOZER_PID
+          local exit_code=$?
+          
+          # Check build log for success/failure indicators
+          local log_file="build.log.$attempt"
+          local has_success=$(grep -i "build successful\|apk created\|package created" "$log_file" 2>/dev/null | wc -l)
+          local has_failure=$(grep -i "build failed\|command failed\|error:" "$log_file" 2>/dev/null | wc -l)
+          
+          echo ""
+          echo "📊 Build attempt $attempt summary:"
+          echo "  Exit code: $exit_code"
+          echo "  Success indicators: $has_success"
+          echo "  Failure indicators: $has_failure"
+          
+          # Check for APK files
+          local apk_count=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+          echo "  APK files found: $apk_count"
+          
+          if [ $apk_count -gt 0 ]; then
+            echo "✓ APK files found!"
+            find . -name "*.apk" -type f 2>/dev/null | head -5
+            return 0
           fi
-          # Also continuously patch files in case they're downloaded during build
-          patch_pyjnius_files > /dev/null 2>&1
-          sleep 2
-        done
+          
+          # If exit code is 0 but no APK, check for errors
+          if [ $exit_code -eq 0 ] && [ $apk_count -eq 0 ]; then
+            echo "⚠ Build reported success but no APK found"
+            echo "📋 Last 30 lines of build log:"
+            tail -30 "$log_file"
+            echo ""
+            echo "📋 Searching for errors in build log:"
+            grep -i "error\|fail\|exception" "$log_file" | tail -10 || echo "No obvious errors found"
+          fi
+          
+          return $exit_code
+        }
         
-        # Wait for buildozer to finish and capture exit code
-        wait $BUILDOZER_PID
-        BUILD_EXIT=$?
-        
-        # Check if APK was actually generated
-        APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
-        echo ""
-        echo "📊 Build Summary:"
-        echo "  Exit code: $BUILD_EXIT"
-        echo "  APK files found: $APK_COUNT"
-        echo ""
-        
-        if [ $BUILD_EXIT -ne 0 ]; then
-          echo "⚠ Build failed with exit code: $BUILD_EXIT"
+        # First build attempt
+        if ! run_build 1; then
+          BUILD_EXIT=$?
+          echo ""
+          echo "⚠ First build failed (exit code: $BUILD_EXIT)"
           echo "🔄 Performing final patch attempt..."
           patch_pyjnius_files
           echo "🔄 Retrying build..."
-          PYTHONUNBUFFERED=1 python3 -m buildozer android debug
-          BUILD_EXIT=$?
-          APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
-          echo "  Retry exit code: $BUILD_EXIT"
-          echo "  APK files found after retry: $APK_COUNT"
+          
+          # Second build attempt
+          if ! run_build 2; then
+            BUILD_EXIT=$?
+            echo ""
+            echo "❌ Build failed after 2 attempts"
+            echo "📋 Checking final APK count..."
+            APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+            if [ $APK_COUNT -eq 0 ]; then
+              echo "❌ No APK files generated"
+              echo "📋 Last 50 lines of latest build log:"
+              tail -50 build.log.2
+              exit 1
+            fi
+          fi
         fi
         
-        # Verify APK was created
-        if [ $BUILD_EXIT -eq 0 ] && [ $APK_COUNT -eq 0 ]; then
-          echo "⚠ Build reported success but no APK found!"
-          echo "📋 Checking build log for errors..."
-          tail -50 build.log | grep -i "error\|fail\|exception" || echo "No obvious errors in last 50 lines"
-          echo ""
-          echo "Full build log saved to build.log"
+        # Final verification
+        APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+        if [ $APK_COUNT -eq 0 ]; then
+          echo "❌ Build completed but no APK files found"
+          echo "📋 Searching all build logs for errors:"
+          grep -i "error\|fail" build.log.* | tail -20 || true
           exit 1
         fi
         
-        if [ $BUILD_EXIT -ne 0 ]; then
-          echo "❌ Build failed"
-          exit 1
-        fi
-        
-        echo "✓ Build succeeded with $APK_COUNT APK file(s)"
-        find . -name "*.apk" -type f 2>/dev/null | head -5
+        echo ""
+        echo "✅ Build succeeded! Found $APK_COUNT APK file(s):"
+        find . -name "*.apk" -type f 2>/dev/null
       timeout-minutes: 90
     
     - name: Find and list APK files
