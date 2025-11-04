@@ -205,10 +205,6 @@ jobs:
         # Clean previous build to ensure fresh python-for-android checkout
         rm -rf .buildozer/android/platform/python-for-android 2>/dev/null || true
         
-        # Initial patch attempt before build starts (in case files already exist)
-        echo "🔧 Pre-patching pyjnius files (if any exist)..."
-        patch_pyjnius_files || true
-        
         # Function to patch pyjnius files - patch ALL pyjnius source files
         patch_pyjnius_files() {
           local patched=0
@@ -246,6 +242,10 @@ jobs:
           done
           return $patched
         }
+        
+        # Initial patch attempt before build starts (in case files already exist)
+        echo "🔧 Pre-patching pyjnius files (if any exist)..."
+        patch_pyjnius_files || true
         
         # Start monitoring and patching in background
         (
