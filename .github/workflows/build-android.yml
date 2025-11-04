@@ -202,9 +202,12 @@ jobs:
         # Ensure Java is available for Buildozer
         export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/temurin-17-jdk-amd64}
         export PATH=$JAVA_HOME/bin:$PATH
+        # Clean previous build to ensure fresh python-for-android checkout
+        rm -rf .buildozer/android/platform/python-for-android 2>/dev/null || true
         # Buildozer uses its own SDK in .buildozer/android/platform/android-sdk
+        # Using p4a.branch = master in buildozer.spec to get latest fixes
         python3 -m buildozer android debug
-      timeout-minutes: 60
+      timeout-minutes: 90
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4

@@ -122,3 +122,7 @@ log_level = 2
 # (int) 显示警告次数
 warn_on_root = 1
 
+# (str) python-for-android 分支/版本
+# 使用 master 分支以获取最新的兼容性修复（包括 pyjnius 的 long 类型修复）
+p4a.branch = master
+
