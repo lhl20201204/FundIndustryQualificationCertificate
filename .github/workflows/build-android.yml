@@ -111,12 +111,27 @@ jobs:
         
         echo "✓ sdkmanager found at $SDKMANAGER"
         
-        # Create compatibility symlink for Buildozer (it expects tools/bin/sdkmanager)
-        if [ ! -d "$ANDROID_HOME/tools" ]; then
-          echo "Creating compatibility symlink for Buildozer..."
-          mkdir -p $ANDROID_HOME/tools
-          ln -s ../cmdline-tools/latest/bin $ANDROID_HOME/tools/bin || true
-          echo "✓ Compatibility symlink created"
+        # Create compatibility directory structure for Buildozer (it expects tools/bin/sdkmanager)
+        if [ ! -d "$ANDROID_HOME/tools/bin" ]; then
+          echo "Creating compatibility directory for Buildozer..."
+          mkdir -p $ANDROID_HOME/tools/bin
+          # Copy sdkmanager and related scripts instead of symlink for better compatibility
+          cp -r $ANDROID_HOME/cmdline-tools/latest/bin/* $ANDROID_HOME/tools/bin/ 2>/dev/null || true
+          # Also copy lib directory if it exists
+          if [ -d "$ANDROID_HOME/cmdline-tools/latest/lib" ]; then
+            mkdir -p $ANDROID_HOME/tools/lib
+            cp -r $ANDROID_HOME/cmdline-tools/latest/lib/* $ANDROID_HOME/tools/lib/ 2>/dev/null || true
+          fi
+          echo "✓ Compatibility directory created"
+        fi
+        
+        # Verify the compatibility structure
+        if [ -f "$ANDROID_HOME/tools/bin/sdkmanager" ]; then
+          echo "✓ Buildozer compatibility path verified: $ANDROID_HOME/tools/bin/sdkmanager"
+          # Make sure it's executable
+          chmod +x $ANDROID_HOME/tools/bin/sdkmanager || true
+        else
+          echo "⚠ Warning: Compatibility path not created, Buildozer may fail"
         fi
         
         # Accept all licenses using echo and proper method
@@ -133,6 +148,9 @@ jobs:
         
         # Install platform-tools, build-tools, and platform
         echo "Installing Android SDK components..."
+        # Use absolute path and ensure Java is available
+        export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/temurin-17-jdk-amd64}
+        export PATH=$JAVA_HOME/bin:$PATH
         $SDKMANAGER --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;33.0.0" "platforms;android-30" 2>&1
         
         # Verify build-tools installation
@@ -171,6 +189,9 @@ jobs:
     - name: Build APK
       run: |
         export PATH="$HOME/.local/bin:$PATH"
+        # Ensure Java is available for Buildozer
+        export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/temurin-17-jdk-amd64}
+        export PATH=$JAVA_HOME/bin:$PATH
         # Buildozer uses its own SDK in .buildozer/android/platform/android-sdk
         python3 -m buildozer android debug
       timeout-minutes: 60
