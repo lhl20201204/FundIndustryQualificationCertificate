@@ -210,8 +210,9 @@ jobs:
           local patched=0
           # Find all pyjnius .pxi and .pyx files
           find .buildozer -type f \( -name "*.pxi" -o -name "*.pyx" \) 2>/dev/null | grep -E "(jnius|pyjnius)" | while read file; do
-            # Check if file contains 'long' type references
-            if grep -qE '\blong\b' "$file" 2>/dev/null; then
+            # Check if file contains 'long' type references (but NOT in ctypedef statements)
+            # We need to replace Python 'long' but NOT C 'long' in ctypedef
+            if grep -qE '\blong\b' "$file" 2>/dev/null && ! grep -qE 'ctypedef.*long' "$file" 2>/dev/null || grep -qE '(isinstance|long:)' "$file" 2>/dev/null; then
               echo "🔧 Patching pyjnius file: $file"
               
               # IMPORTANT: Replace long as dictionary key FIRST (before other replacements)
@@ -235,21 +236,87 @@ jobs:
               sed -i 's/and isinstance(\([^,]*\), long)/and isinstance(\1, int)/g' "$file"
               sed -i 's/or isinstance(\([^,]*\), long)/or isinstance(\1, int)/g' "$file"
               
-              # Replace type hints and annotations (but be careful)
-              sed -i 's/: long/: int/g' "$file" || true
+              # Replace type hints and annotations (but be careful to avoid ctypedef)
+              # Only replace if NOT in a ctypedef line
+              sed -i '/ctypedef/!s/: long/: int/g' "$file" || true
               
               # Replace 'long' type in isinstance checks (more comprehensive)
               sed -i 's/isinstance(\([^)]*\), long)/isinstance(\1, int)/g' "$file"
               
-              # FINAL: Replace any remaining 'long' as standalone type reference
-              # This handles cases like: long: 'J' in dict, or long as variable type
-              # Use word boundaries to avoid replacing variable names
-              sed -i 's/\blong\b/int/g' "$file"
+              # Replace long as dictionary key/value (but NOT in ctypedef)
+              # This is safe because we already handled dictionary keys above
               
-              # Verify the patch - check if file still contains 'long'
-              if grep -qE '\blong\b' "$file" 2>/dev/null; then
-                echo "⚠ Warning: File still contains 'long' after patching: $file"
-                grep -n '\blong\b' "$file" | head -5
+              # CRITICAL: Do NOT replace 'long' in ctypedef statements (C types)
+              # Only replace Python 'long' type references, not C 'long' types
+              # Use a Python script to do more precise replacement
+              python3 << 'PYTHON_EOF'
+import re
+import sys
+
+file_path = sys.argv[1]
+with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+    content = f.read()
+
+# Don't modify if file contains ctypedef with long (C types should stay)
+if 'ctypedef' in content and 'long' in content:
+    # Only replace long in Python contexts, not in ctypedef
+    lines = content.split('\n')
+    new_lines = []
+    for line in lines:
+        # Skip ctypedef lines - they contain C types, not Python types
+        if 'ctypedef' in line and 'long' in line:
+            new_lines.append(line)
+            continue
+        # Replace long in Python contexts only
+        # Replace isinstance(..., long) patterns
+        line = re.sub(r'isinstance\(([^,]+),\s*long\)', r'isinstance(\1, int)', line)
+        # Replace long in tuples like (int, long)
+        line = re.sub(r'\(int,\s*long\)', r'(int, int)', line)
+        line = re.sub(r'\(long,\s*int\)', r'(int, int)', line)
+        # Replace long as dictionary key (already handled by sed, but ensure)
+        line = re.sub(r'(\s|^)long\s*:', r'\1int:', line)
+        # Replace standalone long (but not if it's part of another word or in ctypedef context)
+        if 'ctypedef' not in line:
+            line = re.sub(r'\blong\b', 'int', line)
+        new_lines.append(line)
+    content = '\n'.join(new_lines)
+else:
+    # No ctypedef, safe to replace all long
+    content = re.sub(r'\blong\b', 'int', content)
+
+with open(file_path, 'w', encoding='utf-8') as f:
+    f.write(content)
+PYTHON_EOF
+              python3 -c "
+import re
+import sys
+file_path = '$file'
+with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+    content = f.read()
+lines = content.split('\n')
+new_lines = []
+for line in lines:
+    # Preserve ctypedef lines with long (C types)
+    if 'ctypedef' in line and 'long' in line:
+        new_lines.append(line)
+        continue
+    # Replace long in Python contexts
+    line = re.sub(r'isinstance\(([^,]+),\s*long\)', r'isinstance(\1, int)', line)
+    line = re.sub(r'\(int,\s*long\)', r'(int, int)', line)
+    line = re.sub(r'\(long,\s*int\)', r'(int, int)', line)
+    line = re.sub(r'(\s|^)long\s*:', r'\1int:', line)
+    # Replace remaining long (but not in ctypedef)
+    if 'ctypedef' not in line:
+        line = re.sub(r'\blong\b', 'int', line)
+    new_lines.append(line)
+with open(file_path, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(new_lines))
+" || true
+              
+              # Verify the patch - check if file still contains 'long' in Python contexts
+              if grep -qE '(isinstance.*long|long\s*:)' "$file" 2>/dev/null; then
+                echo "⚠ Warning: File still contains Python 'long' after patching: $file"
+                grep -n -E '(isinstance.*long|long\s*:)' "$file" | head -5 || true
               fi
               
               echo "✓ Patched: $file"
