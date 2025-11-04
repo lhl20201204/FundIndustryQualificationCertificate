@@ -282,10 +282,43 @@ jobs:
         fi
       timeout-minutes: 90
     
+    - name: Find and list APK files
+      run: |
+        echo "🔍 Searching for APK files..."
+        echo ""
+        echo "Current directory: $(pwd)"
+        echo ""
+        echo "Files in bin/ directory:"
+        ls -lah bin/ 2>/dev/null || echo "bin/ directory not found"
+        echo ""
+        echo "Searching for APK files in project root:"
+        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found in project root"
+        echo ""
+        echo "Searching in .buildozer directory:"
+        find .buildozer -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found in .buildozer"
+        echo ""
+        # List APK files with full path for upload
+        APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null | head -10)
+        if [ -n "$APK_FILES" ]; then
+          echo "✓ Found APK files:"
+          echo "$APK_FILES"
+          echo ""
+          echo "APK_FILES<<EOF" >> $GITHUB_ENV
+          echo "$APK_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        else
+          echo "⚠ No APK files found"
+        fi
+    
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
+      continue-on-error: true
       with:
         name: android-apk
-        path: bin/*.apk
+        path: |
+          bin/*.apk
+          .buildozer/**/*.apk
+        if-no-files-found: warn
         retention-days: 30
+        compression-level: 6
 
