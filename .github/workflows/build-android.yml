@@ -18,7 +18,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.10'
     
     - name: Install system dependencies
       run: |
@@ -44,6 +44,8 @@ jobs:
     - name: Install Buildozer and dependencies
       run: |
         pip install --user buildozer cython
+        # Upgrade Cython to latest version for better Python 3 compatibility
+        pip install --user --upgrade cython
         python3 -m buildozer --version
         python3 -c "import Cython; print('Cython version:', Cython.__version__)"
     
