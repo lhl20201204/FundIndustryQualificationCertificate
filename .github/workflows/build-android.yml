@@ -204,9 +204,61 @@ jobs:
         export PATH=$JAVA_HOME/bin:$PATH
         # Clean previous build to ensure fresh python-for-android checkout
         rm -rf .buildozer/android/platform/python-for-android 2>/dev/null || true
-        # Buildozer uses its own SDK in .buildozer/android/platform/android-sdk
-        # Using p4a.branch = master in buildozer.spec to get latest fixes
-        python3 -m buildozer android debug
+        
+        # Function to patch pyjnius files
+        patch_pyjnius_files() {
+          local patched=0
+          find .buildozer -name "jnius_utils.pxi" -type f 2>/dev/null | while read file; do
+            if grep -q "isinstance(arg, long)" "$file" 2>/dev/null || grep -qE '\blong\b' "$file" 2>/dev/null; then
+              echo "🔧 Patching pyjnius file: $file"
+              # Replace isinstance(arg, long) with isinstance(arg, int)
+              sed -i 's/isinstance(arg, long)/isinstance(arg, int)/g' "$file"
+              # Replace any other long type references (but be careful with word boundaries)
+              # Only replace 'long' when it's a type, not in variable names
+              sed -i 's/(isinstance(arg, long)/(isinstance(arg, int)/g' "$file"
+              sed -i 's/and isinstance(arg, long)/and isinstance(arg, int)/g' "$file"
+              # Replace standalone long type references
+              sed -i 's/^[[:space:]]*long[[:space:]]*$//g' "$file" || true
+              sed -i 's/: long/: int/g' "$file" || true
+              echo "✓ Patched: $file"
+              patched=1
+            fi
+          done
+          return $patched
+        }
+        
+        # Start monitoring and patching in background
+        (
+          echo "🔄 Starting pyjnius patcher monitor..."
+          while true; do
+            patch_pyjnius_files > /dev/null 2>&1
+            sleep 3
+          done
+        ) &
+        MONITOR_PID=$!
+        echo "✓ Monitor started (PID: $MONITOR_PID)"
+        
+        # Function to cleanup on exit
+        cleanup() {
+          echo "🛑 Stopping monitor..."
+          kill $MONITOR_PID 2>/dev/null || true
+          wait $MONITOR_PID 2>/dev/null || true
+        }
+        trap cleanup EXIT
+        
+        # Run buildozer
+        echo "🚀 Starting buildozer..."
+        if python3 -m buildozer android debug; then
+          echo "✓ Build succeeded"
+          exit 0
+        else
+          BUILD_EXIT=$?
+          echo "⚠ Build failed with exit code: $BUILD_EXIT"
+          echo "🔄 Performing final patch attempt..."
+          patch_pyjnius_files
+          echo "🔄 Retrying build..."
+          python3 -m buildozer android debug || exit $?
+        fi
       timeout-minutes: 90
     
     - name: Upload APK artifact
