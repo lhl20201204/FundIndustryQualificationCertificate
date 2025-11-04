@@ -56,39 +56,59 @@ jobs:
           mv cmdline-tools latest
           mv latest cmdline-tools/
           rm commandlinetools-linux-9477386_latest.zip
+          echo "✓ Command Line Tools downloaded"
+        else
+          echo "✓ Command Line Tools already exists"
         fi
         
-        # Set up environment
-        export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-        export ANDROID_SDK_ROOT=$ANDROID_HOME
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+        # Set up environment variables
+        ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
+        ANDROID_SDK_ROOT=$ANDROID_HOME
+        SDKMANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
         
-        # Accept all licenses
+        # Verify sdkmanager exists
+        if [ ! -f "$SDKMANAGER" ]; then
+          echo "✗ Error: sdkmanager not found at $SDKMANAGER"
+          exit 1
+        fi
+        
+        echo "✓ sdkmanager found at $SDKMANAGER"
+        
+        # Accept all licenses using echo and proper method
         echo "Accepting Android SDK licenses..."
-        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        mkdir -p $ANDROID_HOME/licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_HOME/licenses/android-sdk-license
+        echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_HOME/licenses/android-sdk-preview-license
+        echo "d975f751698a77b662f1254ddbeed3901e976f5a" > $ANDROID_HOME/licenses/android-googletv-license
+        echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > $ANDROID_HOME/licenses/android-sdk-arm-dbt-license
+        echo "33b6a2b64607f11b759f320ef9dff34ae76f516d" > $ANDROID_HOME/licenses/google-gdk-license
+        echo "8403addf88ab4874007e1c1e80a0025de2550a16" > $ANDROID_HOME/licenses/intel-android-extra-license
+        echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > $ANDROID_HOME/licenses/mips-android-sysimage-license
+        echo "✓ Licenses accepted"
         
         # Install platform-tools, build-tools, and platform
         echo "Installing Android SDK components..."
-        sdkmanager "platform-tools" "build-tools;33.0.0" "platforms;android-30" > /dev/null 2>&1
+        $SDKMANAGER --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;33.0.0" "platforms;android-30" 2>&1
         
         # Verify build-tools installation
         if [ -d "$ANDROID_HOME/build-tools/33.0.0" ]; then
           echo "✓ Build Tools 33.0.0 installed successfully"
-          ls -la $ANDROID_HOME/build-tools/33.0.0/ | grep aidl || echo "⚠ aidl not found in 33.0.0"
-        fi
-        
-        # Also check if Buildozer's expected path exists
-        if [ -d "$ANDROID_HOME/build-tools" ]; then
-          echo "✓ Build Tools directory created"
-          # Create symlink to the version Buildozer expects, or just verify
-          echo "Build tools versions available:"
-          ls -la $ANDROID_HOME/build-tools/ || true
+          if [ -f "$ANDROID_HOME/build-tools/33.0.0/aidl" ]; then
+            echo "✓ aidl found at $ANDROID_HOME/build-tools/33.0.0/aidl"
+          else
+            echo "⚠ aidl not found in 33.0.0, listing files:"
+            ls -la $ANDROID_HOME/build-tools/33.0.0/ | head -20
+          fi
+        else
+          echo "✗ Build Tools 33.0.0 not found"
+          echo "Available build-tools:"
+          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "build-tools directory not found"
         fi
         
         # Save environment variables
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "PATH=$PATH" >> $GITHUB_ENV
+        echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0" >> $GITHUB_ENV
     
     - name: Verify project files
       run: |
