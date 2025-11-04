@@ -231,8 +231,11 @@ jobs:
         (
           echo "🔄 Starting pyjnius patcher monitor..."
           while true; do
-            patch_pyjnius_files > /dev/null 2>&1
-            sleep 3
+            # Patch files and show output
+            if patch_pyjnius_files; then
+              echo "✓ Patched files found"
+            fi
+            sleep 2
           done
         ) &
         MONITOR_PID=$!
@@ -246,18 +249,36 @@ jobs:
         }
         trap cleanup EXIT
         
-        # Run buildozer
+        # Run buildozer with log monitoring
         echo "🚀 Starting buildozer..."
-        if python3 -m buildozer android debug; then
+        # Use unbuffered output to see logs in real-time
+        PYTHONUNBUFFERED=1 python3 -m buildozer android debug 2>&1 | tee build.log &
+        BUILDOZER_PID=$!
+        
+        # Monitor build log for pyjnius compilation errors
+        while kill -0 $BUILDOZER_PID 2>/dev/null; do
+          # Check if we're at the pyjnius compilation stage
+          if tail -100 build.log 2>/dev/null | grep -q "Cythonize jnius"; then
+            echo "🔧 Detected pyjnius compilation, patching files..."
+            patch_pyjnius_files
+            sleep 1
+          fi
+          sleep 2
+        done
+        
+        # Wait for buildozer to finish
+        wait $BUILDOZER_PID
+        BUILD_EXIT=$?
+        
+        if [ $BUILD_EXIT -eq 0 ]; then
           echo "✓ Build succeeded"
           exit 0
         else
-          BUILD_EXIT=$?
           echo "⚠ Build failed with exit code: $BUILD_EXIT"
           echo "🔄 Performing final patch attempt..."
           patch_pyjnius_files
           echo "🔄 Retrying build..."
-          python3 -m buildozer android debug || exit $?
+          PYTHONUNBUFFERED=1 python3 -m buildozer android debug || exit $?
         fi
       timeout-minutes: 90
     
