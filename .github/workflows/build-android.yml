@@ -104,10 +104,20 @@ jobs:
         # Verify sdkmanager exists
         if [ ! -f "$SDKMANAGER" ]; then
           echo "✗ Error: sdkmanager not found at $SDKMANAGER"
+          echo "Searching for sdkmanager..."
+          find $ANDROID_HOME -name "sdkmanager" -type f 2>/dev/null | head -5
           exit 1
         fi
         
         echo "✓ sdkmanager found at $SDKMANAGER"
+        
+        # Create compatibility symlink for Buildozer (it expects tools/bin/sdkmanager)
+        if [ ! -d "$ANDROID_HOME/tools" ]; then
+          echo "Creating compatibility symlink for Buildozer..."
+          mkdir -p $ANDROID_HOME/tools
+          ln -s ../cmdline-tools/latest/bin $ANDROID_HOME/tools/bin || true
+          echo "✓ Compatibility symlink created"
+        fi
         
         # Accept all licenses using echo and proper method
         echo "Accepting Android SDK licenses..."
