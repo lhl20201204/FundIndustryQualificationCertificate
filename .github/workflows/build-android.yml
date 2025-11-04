@@ -48,15 +48,38 @@ jobs:
         
         # Download Android Command Line Tools
         cd ~/.buildozer/android/platform/android-sdk
-        if [ ! -d "cmdline-tools" ]; then
+        if [ ! -d "cmdline-tools/latest" ]; then
           echo "Downloading Android Command Line Tools..."
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools
-          mv cmdline-tools latest
-          mv latest cmdline-tools/
-          rm commandlinetools-linux-9477386_latest.zip
+          
+          # The zip extracts to 'cmdline-tools' directory, we need to move it to cmdline-tools/latest
+          if [ -d "cmdline-tools" ]; then
+            mkdir -p cmdline-tools-temp
+            mv cmdline-tools/* cmdline-tools-temp/
+            rmdir cmdline-tools
+            mkdir -p cmdline-tools
+            mv cmdline-tools-temp cmdline-tools/latest
+          else
+            # If structure is different, create the expected structure
+            mkdir -p cmdline-tools/latest
+            if [ -d "bin" ]; then
+              mv bin lib NOTICE.txt source.properties cmdline-tools/latest/ 2>/dev/null || true
+            fi
+          fi
+          
+          rm -f commandlinetools-linux-9477386_latest.zip
           echo "✓ Command Line Tools downloaded"
+          
+          # Verify structure
+          if [ -f "cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "✓ sdkmanager found at correct location"
+          else
+            echo "⚠ Checking extracted structure..."
+            find . -name "sdkmanager" -type f 2>/dev/null | head -5
+            ls -la cmdline-tools/ 2>/dev/null || true
+            ls -la cmdline-tools/latest/ 2>/dev/null || true
+          fi
         else
           echo "✓ Command Line Tools already exists"
         fi
