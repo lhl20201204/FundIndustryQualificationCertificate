@@ -25,7 +25,7 @@ source.include_patterns = questions.json
 source.main = main_android.py
 
 # (list) 应用依赖
-requirements = python3,kivy>=2.1.0,plyer>=2.1.0,pyjnius>=1.5.0
+requirements = python3,kivy>=2.1.0,plyer>=2.1.0
 
 # (str) 自定义源码包含路径（例如为Android提供额外的源码）
 #source.include_patterns = assets/*,images/*.png
