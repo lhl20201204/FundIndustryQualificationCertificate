@@ -43,11 +43,13 @@ jobs:
     
     - name: Install Buildozer and dependencies
       run: |
-        pip install --user buildozer cython
-        # Upgrade Cython to latest version for better Python 3 compatibility
-        pip install --user --upgrade cython
+        # Install latest buildozer and python-for-android
+        pip install --user buildozer python-for-android cython
+        # Upgrade to latest versions for better compatibility
+        pip install --user --upgrade buildozer python-for-android cython
         python3 -m buildozer --version
         python3 -c "import Cython; print('Cython version:', Cython.__version__)"
+        python3 -c "import pythonforandroid; print('python-for-android version:', pythonforandroid.__version__)" 2>/dev/null || echo "python-for-android version check failed"
     
     - name: Set up Android SDK with Build Tools
       run: |
