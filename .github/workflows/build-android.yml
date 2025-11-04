@@ -25,11 +25,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           git zip unzip openjdk-11-jdk \
-          autoconf libtool pkg-config \
+          autoconf automake libtool pkg-config \
           zlib1g-dev libncurses5-dev \
           libncursesw5-dev \
           cmake libffi-dev libssl-dev \
-          python3-pip wget unzip curl || true
+          python3-pip wget unzip curl \
+          build-essential gcc g++ make \
+          patch gettext libxml2-dev libxslt1-dev \
+          libjpeg-dev libpng-dev libtiff-dev \
+          libfreetype6-dev liblcms2-dev \
+          libwebp-dev libopenjp2-7-dev || true
         # Try to install libtinfo5/libtinfo6 if available
         sudo apt-get install -y libtinfo6 2>/dev/null || \
         sudo apt-get install -y libtinfo5 2>/dev/null || \
