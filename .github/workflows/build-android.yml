@@ -208,78 +208,82 @@ jobs:
         # Function to patch pyjnius files - patch ALL pyjnius source files
         patch_pyjnius_files() {
           local patched=0
+          # Create Python patch script as a temporary file
+          local patch_script=$(mktemp)
+          cat > "$patch_script" << 'PYTHON_EOF'
+        import re
+        import sys
+
+        file_path = sys.argv[1]
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+            
+            new_lines = []
+            modified = False
+            
+            for line in lines:
+                original_line = line
+                # CRITICAL: Preserve ctypedef lines - they contain C types, not Python types
+                if 'ctypedef' in line and 'long' in line:
+                    new_lines.append(line)
+                    continue
+                
+                # Replace isinstance(..., long) patterns
+                if 'isinstance' in line and 'long' in line:
+                    line = re.sub(r'isinstance\(([^,]+),\s*long\)', r'isinstance(\1, int)', line)
+                    line = re.sub(r'isinstance\(([^,]+),\s*\(int,\s*long\)\)', r'isinstance(\1, int)', line)
+                    line = re.sub(r'isinstance\(([^,]+),\s*\(long,\s*int\)\)', r'isinstance(\1, int)', line)
+                    if line != original_line:
+                        modified = True
+                
+                # Replace long in tuples like (int, long) or (long, int)
+                if '(' in line and 'long' in line:
+                    line = re.sub(r'\(int,\s*long\)', r'(int, int)', line)
+                    line = re.sub(r'\(long,\s*int\)', r'(int, int)', line)
+                    if line != original_line:
+                        modified = True
+                
+                # Replace long as dictionary key: long: -> int:
+                if ':' in line and 'long' in line:
+                    line = re.sub(r'(\s|^)long\s*:', r'\1int:', line)
+                    if line != original_line:
+                        modified = True
+                
+                # Replace standalone 'long' (Python type, not C type)
+                # But be careful - only replace if it's clearly a Python type reference
+                if 'long' in line and 'ctypedef' not in line:
+                    # Replace long in Python type contexts
+                    # Match: long (as standalone), long, (in lists), etc.
+                    # But avoid replacing 'long' in variable names or strings
+                    line = re.sub(r'\blong\b', 'int', line)
+                    if line != original_line:
+                        modified = True
+                
+                new_lines.append(line)
+            
+            if modified:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.writelines(new_lines)
+                print(f'✓ Patched: {file_path}')
+            else:
+                print(f'  No changes needed: {file_path}')
+        except Exception as e:
+            print(f'⚠ Error patching {file_path}: {e}', file=sys.stderr)
+        PYTHON_EOF
+          
           # Find all pyjnius .pxi and .pyx files
           find .buildozer -type f \( -name "*.pxi" -o -name "*.pyx" \) 2>/dev/null | grep -E "(jnius|pyjnius)" | while read file; do
             # Check if file contains Python 'long' type references (not C 'long' in ctypedef)
             if grep -qE '\blong\b' "$file" 2>/dev/null; then
               echo "🔧 Patching pyjnius file: $file"
-              
-              # Use Python script to safely replace only Python 'long', preserving C 'long' in ctypedef
-              python3 -c "
-import re
-import sys
-
-file_path = '$file'
-try:
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-        lines = f.readlines()
-    
-    new_lines = []
-    modified = False
-    
-    for line in lines:
-        original_line = line
-        # CRITICAL: Preserve ctypedef lines - they contain C types, not Python types
-        if 'ctypedef' in line and 'long' in line:
-            new_lines.append(line)
-            continue
-        
-        # Replace isinstance(..., long) patterns
-        if 'isinstance' in line and 'long' in line:
-            line = re.sub(r'isinstance\(([^,]+),\s*long\)', r'isinstance(\1, int)', line)
-            line = re.sub(r'isinstance\(([^,]+),\s*\(int,\s*long\)\)', r'isinstance(\1, int)', line)
-            line = re.sub(r'isinstance\(([^,]+),\s*\(long,\s*int\)\)', r'isinstance(\1, int)', line)
-            if line != original_line:
-                modified = True
-        
-        # Replace long in tuples like (int, long) or (long, int)
-        if '(' in line and 'long' in line:
-            line = re.sub(r'\(int,\s*long\)', r'(int, int)', line)
-            line = re.sub(r'\(long,\s*int\)', r'(int, int)', line)
-            if line != original_line:
-                modified = True
-        
-        # Replace long as dictionary key: long: -> int:
-        if ':' in line and 'long' in line:
-            line = re.sub(r'(\s|^)long\s*:', r'\1int:', line)
-            if line != original_line:
-                modified = True
-        
-        # Replace standalone 'long' (Python type, not C type)
-        # But be careful - only replace if it's clearly a Python type reference
-        if 'long' in line and 'ctypedef' not in line:
-            # Replace long in Python type contexts
-            # Match: long (as standalone), long, (in lists), etc.
-            # But avoid replacing 'long' in variable names or strings
-            line = re.sub(r'\blong\b', 'int', line)
-            if line != original_line:
-                modified = True
-        
-        new_lines.append(line)
-    
-    if modified:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
-        print(f'✓ Patched: {file_path}')
-    else:
-        print(f'  No changes needed: {file_path}')
-except Exception as e:
-    print(f'⚠ Error patching {file_path}: {e}', file=sys.stderr)
-"
-              
+              python3 "$patch_script" "$file"
               patched=1
             fi
           done
+          
+          # Cleanup
+          rm -f "$patch_script"
           return $patched
         }
         
