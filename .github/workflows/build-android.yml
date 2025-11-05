@@ -215,11 +215,11 @@ jobs:
               echo "🔧 Patching pyjnius file: $file"
               
               # Use Python script to safely replace only Python 'long', preserving C 'long' in ctypedef
-              python3 << PYTHON_EOF
+              python3 -c "
 import re
 import sys
 
-file_path = "$file"
+file_path = '$file'
 try:
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         lines = f.readlines()
@@ -270,12 +270,12 @@ try:
     if modified:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.writelines(new_lines)
-        print(f"✓ Patched: {file_path}")
+        print(f'✓ Patched: {file_path}')
     else:
-        print(f"  No changes needed: {file_path}")
+        print(f'  No changes needed: {file_path}')
 except Exception as e:
-    print(f"⚠ Error patching {file_path}: {e}", file=sys.stderr)
-PYTHON_EOF
+    print(f'⚠ Error patching {file_path}: {e}', file=sys.stderr)
+"
               
               patched=1
             fi
