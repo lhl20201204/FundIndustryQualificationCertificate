@@ -35,7 +35,8 @@ jobs:
           patch gettext libxml2-dev libxslt1-dev \
           libjpeg-dev libpng-dev libtiff-dev \
           libfreetype6-dev liblcms2-dev \
-          libwebp-dev libopenjp2-7-dev || true
+          libwebp-dev libopenjp2-7-dev \
+          liblzma-dev || true
         # Try to install libtinfo5/libtinfo6 if available
         sudo apt-get install -y libtinfo6 2>/dev/null || \
         sudo apt-get install -y libtinfo5 2>/dev/null || \
