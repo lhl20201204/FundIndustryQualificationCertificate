@@ -46,31 +46,7 @@ class ScrollableOptionWidget(QWidget):
         """)
         layout.addWidget(self.radio_button, 0)  # 不拉伸
         
-        # 滚动区域和文本标签
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:horizontal {
-                height: 8px;
-                background: rgba(200, 200, 200, 0.3);
-                border-radius: 4px;
-            }
-            QScrollBar::handle:horizontal {
-                background: rgba(100, 100, 100, 0.5);
-                border-radius: 4px;
-                min-width: 20px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background: rgba(80, 80, 80, 0.7);
-            }
-        """)
-        
+        # 文本标签（自动换行，不滚动）
         self.text_label = QLabel()
         self.text_label.setStyleSheet("""
             QLabel {
@@ -79,23 +55,18 @@ class ScrollableOptionWidget(QWidget):
                 background: transparent;
             }
         """)
-        self.text_label.setWordWrap(False)  # 不自动换行，允许水平滚动
+        self.text_label.setWordWrap(True)  # 自动换行
         self.text_label.setTextFormat(Qt.TextFormat.PlainText)
         self.text_label.setMinimumHeight(25)  # 设置最小高度
         
-        scroll_area.setWidget(self.text_label)
-        layout.addWidget(scroll_area, 1)  # 可拉伸
+        layout.addWidget(self.text_label, 1)  # 可拉伸
     
     def setText(self, text: str):
         """设置文本"""
         if self.text_label:
             self.text_label.setText(text)
-            # 更新标签尺寸，确保可以滚动
+            # 自动调整大小以适应换行后的文本
             self.text_label.adjustSize()
-            # 设置最小宽度，让文本可以完整显示
-            fm = self.text_label.fontMetrics()
-            text_width = fm.boundingRect(text).width()
-            self.text_label.setMinimumWidth(text_width + 10)  # 加10px的padding
     
     def isChecked(self) -> bool:
         """是否选中"""
@@ -212,7 +183,21 @@ class FloatingWindow(QWidget):
     
     def init_ui(self):
         """初始化界面"""
-        main_layout = QVBoxLayout()
+        # 创建滚动区域（整个窗口可滚动）
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+        """)
+        
+        # 内容容器（不定高度）
+        content_widget = QWidget()
+        main_layout = QVBoxLayout(content_widget)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(15, 15, 15, 15)
         
@@ -234,10 +219,12 @@ class FloatingWindow(QWidget):
         self.counter_label.setStyleSheet("color: #666; font-size: 11px;")
         main_layout.addWidget(self.counter_label)
         
-        # 题目内容
+        # 题目内容（自动换行，不限制高度）
         self.question_label = QTextEdit()
         self.question_label.setReadOnly(True)
-        self.question_label.setMaximumHeight(80)
+        # 移除最大高度限制，让内容自动换行
+        self.question_label.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.question_label.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.question_label.setStyleSheet("""
             QTextEdit {
                 background-color: rgba(255, 255, 255, 0.95);
@@ -353,7 +340,7 @@ class FloatingWindow(QWidget):
         
         main_layout.addLayout(control_layout)
         
-        # 关闭按钮
+        # 关闭按钮（添加到内容容器中）
         close_btn = QPushButton("关闭")
         close_btn.setStyleSheet("""
             QPushButton {
@@ -371,7 +358,13 @@ class FloatingWindow(QWidget):
         close_btn.clicked.connect(self.close)
         main_layout.addWidget(close_btn)
         
-        self.setLayout(main_layout)
+        # 将内容容器添加到滚动区域
+        scroll_area.setWidget(content_widget)
+        
+        # 设置窗口主布局为滚动区域
+        window_layout = QVBoxLayout(self)
+        window_layout.setContentsMargins(0, 0, 0, 0)
+        window_layout.addWidget(scroll_area)
         
         # 显示第一题
         if self.questions:
@@ -386,7 +379,7 @@ class FloatingWindow(QWidget):
             Qt.WindowType.Window  # 添加窗口标志，确保置顶生效
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(450, 550)
+        self.setFixedSize(450, 600)  # 增加一些高度，允许滚动
         
         # 移动到右上角
         screen = QApplication.primaryScreen().geometry()
@@ -447,8 +440,13 @@ class FloatingWindow(QWidget):
         # 更新计数器
         self.counter_label.setText(f"题目 {index + 1} / {len(self.questions)} (ID: {question.get('id', 'N/A')})")
         
-        # 显示题目
+        # 显示题目（自动换行，高度自适应）
         self.question_label.setText(question.get('title', ''))
+        # 调整 QTextEdit 的高度以适应内容
+        doc = self.question_label.document()
+        doc.setTextWidth(self.question_label.viewport().width())
+        height = int(doc.size().height()) + 20  # 加一些边距
+        self.question_label.setMinimumHeight(max(height, 50))
         
         # 显示选项 - 添加类型检查
         options = question.get('options', {})

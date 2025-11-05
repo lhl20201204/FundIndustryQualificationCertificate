@@ -135,27 +135,30 @@ class OptionButton(BoxLayout):
             state='normal'
         )
         
-        # 选项文本（可滚动）
-        scroll = ScrollView(
-            do_scroll_x=True,
-            do_scroll_y=False,
-            size_hint_x=0.85
-        )
+        # 选项文本（自动换行，不滚动）
         self.text_label = Label(
             text=option_text,
-            text_size=(None, None),
+            text_size=(Window.width - 100, None),  # 自动换行，宽度为窗口宽度减去按钮和边距
             halign='left',
-            valign='middle',
+            valign='top',
+            size_hint_x=0.85,
             size_hint_y=None,
-            height='50dp',
             font_name=CHINESE_FONT if CHINESE_FONT else None,
             color=(0, 0, 0, 1)  # 黑色文字，确保可见性
         )
-        self.text_label.bind(texture_size=self.text_label.setter('size'))
-        scroll.add_widget(self.text_label)
+        # 绑定文本大小变化，自动调整高度
+        self.text_label.bind(texture_size=self._update_height)
         
         self.add_widget(self.toggle)
-        self.add_widget(scroll)
+        self.add_widget(self.text_label)
+    
+    def _update_height(self, instance, texture_size):
+        """更新文本标签和整个选项按钮的高度"""
+        if texture_size and texture_size[1] > 0:
+            # 文本高度 + 一些边距
+            instance.height = max(texture_size[1] + 20, 50)
+            # 同时更新整个选项按钮的高度
+            self.height = instance.height
     
     def is_selected(self):
         return self.toggle.state == 'down'
@@ -180,8 +183,16 @@ class QuestionApp(App):
         # 设置窗口背景色
         Window.clearcolor = (0.95, 0.95, 0.95, 1)
         
-        # 主容器
-        main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        # 外层滚动容器（整个窗口可滚动）
+        main_scroll = ScrollView(
+            do_scroll_x=False,
+            do_scroll_y=True,
+            bar_width='10dp'
+        )
+        
+        # 主容器（内容区域，不定高度）
+        main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10, size_hint_y=None)
+        main_layout.bind(minimum_height=main_layout.setter('height'))
         
         # 标题栏
         title_bar = Label(
@@ -209,12 +220,7 @@ class QuestionApp(App):
         )
         main_layout.add_widget(self.counter_label)
         
-        # 题目内容区域（可滚动）
-        question_scroll = ScrollView(
-            do_scroll_x=False,
-            do_scroll_y=True,
-            bar_width='10dp'
-        )
+        # 题目内容区域（不滚动，自动换行）
         self.question_label = Label(
             text='加载中...',
             text_size=(Window.width - 40, None),
@@ -226,34 +232,18 @@ class QuestionApp(App):
             size_hint_y=None
         )
         self.question_label.bind(texture_size=self.question_label.setter('size'))
-        question_scroll.add_widget(self.question_label)
-        question_scroll.size_hint_y = None
-        question_scroll.height = '100dp'  # 设置固定高度，允许滚动
-        main_layout.add_widget(question_scroll)
+        main_layout.add_widget(self.question_label)
         
-        # 选项区域（可滚动）
-        options_scroll = ScrollView(
-            do_scroll_x=False,
-            do_scroll_y=True,
-            bar_width='10dp',
-            size_hint_y=1  # 占用剩余空间
-        )
+        # 选项区域（不滚动，自动换行）
         self.options_container = BoxLayout(
             orientation='vertical',
             spacing=10,
             size_hint_y=None
         )
         self.options_container.bind(minimum_height=self.options_container.setter('height'))
-        options_scroll.add_widget(self.options_container)
-        main_layout.add_widget(options_scroll)
+        main_layout.add_widget(self.options_container)
         
-        # 答案显示区域（可滚动）
-        answer_scroll = ScrollView(
-            do_scroll_x=False,
-            do_scroll_y=True,
-            bar_width='10dp',
-            size_hint_y=None
-        )
+        # 答案显示区域（不滚动，自动换行）
         self.answer_label = Label(
             text='',
             text_size=(Window.width - 40, None),
@@ -266,10 +256,8 @@ class QuestionApp(App):
             markup=True
         )
         self.answer_label.bind(texture_size=self.answer_label.setter('size'))
-        answer_scroll.add_widget(self.answer_label)
-        self.answer_scroll_view = answer_scroll
-        answer_scroll.height = 0  # 初始隐藏
-        main_layout.add_widget(answer_scroll)
+        self.answer_label.height = 0  # 初始隐藏
+        main_layout.add_widget(self.answer_label)
         
         # 控制按钮
         controls_layout = GridLayout(cols=2, spacing=10, size_hint_y=None, height='50dp')
@@ -313,6 +301,9 @@ class QuestionApp(App):
         
         main_layout.add_widget(controls_layout)
         
+        # 将主容器添加到滚动视图
+        main_scroll.add_widget(main_layout)
+        
         # 加载题目数据
         self.load_questions()
         
@@ -325,7 +316,7 @@ class QuestionApp(App):
                 import traceback
                 traceback.print_exc()
         
-        return main_layout
+        return main_scroll
     
     def load_questions(self):
         """加载题目数据"""
@@ -399,7 +390,7 @@ class QuestionApp(App):
         
         for opt in ['A', 'B', 'C', 'D']:
             if opt in options and isinstance(options[opt], str):
-                option_widget = OptionButton(opt, f"{opt}. {options[opt]}")
+                option_widget = OptionButton(opt, options[opt])  # 不在这里添加 "A. " 前缀，在 OptionButton 中处理
                 option_widget.toggle.bind(state=self.on_option_selected)
                 self.option_buttons[opt] = option_widget
                 self.options_container.add_widget(option_widget)
