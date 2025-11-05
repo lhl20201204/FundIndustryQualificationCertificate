@@ -363,14 +363,27 @@ jobs:
             return 0
           fi
           
-          # If exit code is 0 but no APK, check for errors
-          if [ $exit_code -eq 0 ] && [ $apk_count -eq 0 ]; then
-            echo "⚠ Build reported success but no APK found"
-            echo "📋 Last 30 lines of build log:"
-            tail -30 "$log_file"
+          # If build failed or no APK found, show detailed error information
+          if [ $exit_code -ne 0 ] || [ $apk_count -eq 0 ]; then
             echo ""
-            echo "📋 Searching for errors in build log:"
-            grep -i "error\|fail\|exception" "$log_file" | tail -10 || echo "No obvious errors found"
+            echo "❌ Build failed or no APK generated!"
+            echo "📋 Last 100 lines of build log:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            tail -100 "$log_file"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "📋 Searching for ERROR/FATAL messages:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            grep -iE "error|fatal|failed|exception|traceback" "$log_file" | tail -30 || echo "No error messages found"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "📋 Searching for buildozer failure messages:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            grep -iE "buildozer failed|command failed|process.*exit" "$log_file" | tail -20 || echo "No buildozer failure messages found"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "📋 Checking for common build issues:"
+            grep -iE "missing|not found|cannot find|undefined|syntax error" "$log_file" | tail -20 || echo "No common issues found"
           fi
           
           return $exit_code
