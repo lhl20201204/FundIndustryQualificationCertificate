@@ -181,9 +181,26 @@ class FloatingWindow(QWidget):
                     data = json.load(f)
                     # 如果有将question随机排序
                     if isinstance(data, list):
-                        self.questions = data
+                        raw_questions = data
                     else:
-                        self.questions = data.get('questions', [])
+                        raw_questions = data.get('questions', [])
+                    
+                    # 过滤掉格式错误的题目
+                    self.questions = []
+                    for i, q in enumerate(raw_questions):
+                        if not isinstance(q, dict):
+                            print(f"警告: 跳过题目 {i}，数据格式错误（不是字典）")
+                            continue
+                        if 'options' not in q:
+                            print(f"警告: 跳过题目 {i} (ID: {q.get('id', 'N/A')})，缺少 options 字段")
+                            continue
+                        if not isinstance(q.get('options'), dict):
+                            print(f"警告: 跳过题目 {i} (ID: {q.get('id', 'N/A')})，options 不是字典类型")
+                            continue
+                        self.questions.append(q)
+                    
+                    print(f"成功加载 {len(self.questions)} 道有效题目（共 {len(raw_questions)} 道）")
+                    
                     # 随机打乱题目顺序
                     random.shuffle(self.questions)
             except Exception as e:
@@ -422,17 +439,29 @@ class FloatingWindow(QWidget):
         self.current_index = index
         question = self.questions[index]
         
+        # 验证题目数据格式
+        if not isinstance(question, dict):
+            print(f"警告: 题目 {index} 数据格式错误，跳过")
+            return
+        
         # 更新计数器
         self.counter_label.setText(f"题目 {index + 1} / {len(self.questions)} (ID: {question.get('id', 'N/A')})")
         
         # 显示题目
         self.question_label.setText(question.get('title', ''))
         
-        # 显示选项
+        # 显示选项 - 添加类型检查
         options = question.get('options', {})
+        if not isinstance(options, dict):
+            print(f"警告: 题目 {index} (ID: {question.get('id', 'N/A')}) 的 options 格式错误，期望字典但得到 {type(options).__name__}")
+            # 如果 options 不是字典，跳过该题目，跳转到下一题
+            if index + 1 < len(self.questions):
+                QTimer.singleShot(100, lambda: self.show_question(index + 1))
+            return
+        
         for opt in ['A', 'B', 'C', 'D']:
             option_widget = self.option_buttons[opt]
-            if opt in options:
+            if opt in options and isinstance(options[opt], str):
                 option_widget.setText(f"{opt}. {options[opt]}")
                 option_widget.setVisible(True)
             else:
